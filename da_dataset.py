@@ -5,9 +5,7 @@ import matplotlib.pyplot as plt
 
 from vap.utils import read_json, batch_to_device, everything_deterministic
 from vap.model import VAPModel
-
 from vap.audio import load_waveform, get_audio_info
-
 from vap_agent.visualize_turn import plot_waveform, plot_mel_spectrogram
 
 
@@ -168,6 +166,74 @@ if __name__ == "__main__":
         print("CUDA")
 
     da = data["qy"][2]
+    waveform = load_da_audio(da)
+
+    # Attention
+    with torch.no_grad():
+        out = model.net(waveform.to(model.device), attention=True)
+
+    print("out['self_attn']: ", tuple(out["self_attn"].shape))
+    print("out['cross_attn']: ", tuple(out["cross_attn"].shape))
+    print("out['cross_self_attn']: ", tuple(out["cross_self_attn"].shape))
+
+    # Average over heads
+    b = 0
+    ind_attn = out["self_attn"][b].mean(dim=2).cpu()
+    self_attn = out["cross_self_attn"][b].mean(dim=2).cpu()
+    cross_attn = out["cross_attn"][b].mean(dim=2).cpu()
+    print("ind_attn: ", tuple(ind_attn.shape))
+    print("self_attn: ", tuple(self_attn.shape))
+    print("cross_attn: ", tuple(cross_attn.shape))
+
+    # Plot cross attention
+    layer = 2
+    start_frame = 500
+    end_frame = -1
+    fig, ax = plt.subplots(6, 1, figsize=(12, 12))
+    ax[0].imshow(
+        ind_attn[0, 0, start_frame:end_frame, start_frame:end_frame].log(),
+        aspect="auto",
+        interpolation="none",
+    )
+    ax[1].imshow(
+        ind_attn[1, 0, start_frame:end_frame, start_frame:end_frame].log(),
+        aspect="auto",
+        interpolation="none",
+    )
+    ax[2].imshow(
+        self_attn[0, layer, start_frame:end_frame, start_frame:end_frame].log(),
+        aspect="auto",
+        interpolation="none",
+    )
+    ax[3].imshow(
+        self_attn[1, layer, start_frame:end_frame, start_frame:end_frame].log(),
+        aspect="auto",
+        interpolation="none",
+    )
+    ax[4].imshow(
+        cross_attn[0, layer, start_frame:end_frame, start_frame:end_frame].log(),
+        aspect="auto",
+        interpolation="none",
+    )
+    ax[5].imshow(
+        cross_attn[1, layer, start_frame:end_frame, start_frame:end_frame].log(),
+        aspect="auto",
+        interpolation="none",
+    )
+    ax[0].text(500, 115, "A Self attention", fontsize=16)
+    ax[1].text(500, 115, "B Self attention", fontsize=16)
+    ax[2].text(500, 115, f"A Self attention (L: {layer})", fontsize=16)
+    ax[3].text(500, 115, f"B Self attention (L: {layer})", fontsize=16)
+    ax[4].text(500, 115, f"A Cross attention (L: {layer})", fontsize=16)
+    ax[5].text(500, 115, f"B Cross attention (L: {layer})", fontsize=16)
+    # label="A Self attention",
+    # label="B Self attention",
+    # label=f"A Self attention (L: {layer})",
+    # label=f"B Self attention (L: {layer})",
+    # label=f"A Cross attention (L: {layer})",
+    # label=f"B Cross attention (L: {layer})",
+    plt.tight_layout()
+    plt.pause(0.1)
 
     for da in data["qw"]:
         plt.close("all")
